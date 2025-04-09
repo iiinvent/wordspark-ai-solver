@@ -1,11 +1,12 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useToast } from "@/components/ui/use-toast";
 import SearchForm, { SearchParams } from "@/components/SearchForm";
 import Results from "@/components/Results";
 import Header from "@/components/Header";
 import ApiKeyForm from "@/components/ApiKeyForm";
 import SettingsDialog from "@/components/SettingsDialog";
+import HelpDialog from "@/components/HelpDialog";
 import { WordResult } from "@/components/ResultCard";
 import { getApiKey, getSelectedModel, searchWords } from "@/services/apiService";
 
@@ -13,6 +14,7 @@ const Index = () => {
   const { toast } = useToast();
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
   const [results, setResults] = useState<WordResult[]>([]);
   const [savedResults, setSavedResults] = useState<WordResult[]>([]);
   const [searchParams, setSearchParams] = useState<SearchParams | undefined>();
@@ -43,6 +45,39 @@ const Index = () => {
   useEffect(() => {
     localStorage.setItem("savedWords", JSON.stringify(savedResults));
   }, [savedResults]);
+  
+  // Set up keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger shortcuts when typing in form fields
+      if (e.target instanceof HTMLInputElement || 
+          e.target instanceof HTMLTextAreaElement ||
+          e.target instanceof HTMLSelectElement) {
+        return;
+      }
+      
+      // Help dialog shortcut
+      if (e.key === "?") {
+        e.preventDefault();
+        setIsHelpModalOpen(true);
+      }
+      
+      // Toggle saved words shortcut
+      if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        setShowOnlySaved(prev => !prev);
+      }
+      
+      // Clear results shortcut
+      if (e.key === "c" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        handleClearResults();
+      }
+    };
+    
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
   
   const handleSearch = async (params: SearchParams) => {
     setIsLoading(true);
@@ -96,7 +131,7 @@ const Index = () => {
     }
   };
   
-  const handleSaveResult = (result: WordResult) => {
+  const handleSaveResult = useCallback((result: WordResult) => {
     // Toggle saved status
     if (result.isSaved) {
       // Remove from saved
@@ -134,17 +169,17 @@ const Index = () => {
         description: `Saved "${result.word}" for future reference`,
       });
     }
-  };
+  }, [toast]);
   
-  const handleClearResults = () => {
+  const handleClearResults = useCallback(() => {
     setResults([]);
     setSearchParams(undefined);
     setShowOnlySaved(false);
-  };
+  }, []);
   
-  const handleToggleSavedFilter = () => {
+  const handleToggleSavedFilter = useCallback(() => {
     setShowOnlySaved(prev => !prev);
-  };
+  }, []);
   
   // Determine which results to display
   const displayResults = showOnlySaved 
@@ -157,6 +192,7 @@ const Index = () => {
         <Header 
           onOpenApiKeyForm={() => setIsApiKeyModalOpen(true)} 
           onOpenSettings={() => setIsSettingsModalOpen(true)}
+          onOpenHelp={() => setIsHelpModalOpen(true)}
         />
         
         <main className="py-8">
@@ -195,6 +231,11 @@ const Index = () => {
       <SettingsDialog
         isOpen={isSettingsModalOpen}
         onClose={() => setIsSettingsModalOpen(false)}
+      />
+      
+      <HelpDialog
+        isOpen={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
       />
     </div>
   );

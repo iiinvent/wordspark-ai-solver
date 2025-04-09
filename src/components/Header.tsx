@@ -1,14 +1,15 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Key, Settings } from "lucide-react";
+import { HelpCircle, Key, Settings } from "lucide-react";
 
 interface HeaderProps {
   onOpenApiKeyForm: () => void;
   onOpenSettings: () => void;
+  onOpenHelp: () => void;
 }
 
-const Header = ({ onOpenApiKeyForm, onOpenSettings }: HeaderProps) => {
+const Header = ({ onOpenApiKeyForm, onOpenSettings, onOpenHelp }: HeaderProps) => {
   return (
     <header className="flex items-center justify-between py-4 px-4 md:px-0">
       <div className="flex items-center">
@@ -21,6 +22,16 @@ const Header = ({ onOpenApiKeyForm, onOpenSettings }: HeaderProps) => {
       </div>
       
       <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-slate-400 hover:text-white hover:bg-puzzle-hover"
+          onClick={onOpenHelp}
+        >
+          <HelpCircle className="h-5 w-5" />
+          <span className="sr-only">Help</span>
+        </Button>
+        
         <Button
           variant="ghost"
           size="icon"

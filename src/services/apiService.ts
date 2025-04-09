@@ -1,4 +1,3 @@
-
 import { SearchParams } from "@/components/SearchForm";
 import { WordResult } from "@/components/ResultCard";
 
@@ -6,6 +5,12 @@ import { WordResult } from "@/components/ResultCard";
 // For now, we'll assume we'd get it from a form or localStorage
 let OPENROUTER_API_KEY = "";
 let SELECTED_MODEL = "";
+let ENABLE_CACHE = true;
+let MAX_RESULTS = 10;
+
+// Cache for storing search results
+const searchCache = new Map<string, { timestamp: number, results: WordResult[] }>();
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
 export const setApiKey = (key: string) => {
   OPENROUTER_API_KEY = key;
@@ -29,6 +34,43 @@ export const getSelectedModel = () => {
     SELECTED_MODEL = localStorage.getItem("selected_model") || "";
   }
   return SELECTED_MODEL;
+};
+
+// Performance settings
+export const setEnableCache = (enable: boolean) => {
+  ENABLE_CACHE = enable;
+  localStorage.setItem("enableCache", String(enable));
+  
+  // Clear cache if disabling
+  if (!enable) {
+    clearCache();
+  }
+};
+
+export const getEnableCache = () => {
+  const savedValue = localStorage.getItem("enableCache");
+  if (savedValue !== null) {
+    ENABLE_CACHE = savedValue === "true";
+  }
+  return ENABLE_CACHE;
+};
+
+export const setMaxResults = (value: number) => {
+  MAX_RESULTS = value;
+  localStorage.setItem("maxResults", String(value));
+};
+
+export const getMaxResults = () => {
+  const savedValue = localStorage.getItem("maxResults");
+  if (savedValue !== null) {
+    MAX_RESULTS = Number(savedValue);
+  }
+  return MAX_RESULTS;
+};
+
+// Cache management
+export const clearCache = () => {
+  searchCache.clear();
 };
 
 export interface OpenRouterModel {
@@ -71,10 +113,61 @@ export const fetchOpenRouterModels = async (): Promise<OpenRouterModel[]> => {
   }
 };
 
+// Generate a cache key based on search parameters
+const generateCacheKey = (params: SearchParams): string => {
+  return JSON.stringify({
+    wordLength: params.wordLength,
+    letters: params.letters,
+    clue: params.clue.toLowerCase().trim(),
+    puzzleType: params.puzzleType,
+    difficulty: params.difficulty,
+    category: params.category
+  });
+};
+
+// Check if cached results are valid
+const getCachedResults = (params: SearchParams): WordResult[] | null => {
+  if (!getEnableCache()) return null;
+  
+  const cacheKey = generateCacheKey(params);
+  const cachedData = searchCache.get(cacheKey);
+  
+  if (cachedData) {
+    const now = Date.now();
+    if (now - cachedData.timestamp < CACHE_EXPIRY) {
+      console.log("✅ Cache hit for:", params);
+      return cachedData.results;
+    } else {
+      // Cache expired, remove it
+      searchCache.delete(cacheKey);
+    }
+  }
+  
+  return null;
+};
+
+// Save results to cache
+const cacheResults = (params: SearchParams, results: WordResult[]): void => {
+  if (!getEnableCache()) return;
+  
+  const cacheKey = generateCacheKey(params);
+  searchCache.set(cacheKey, {
+    timestamp: Date.now(),
+    results
+  });
+  console.log("💾 Cached results for:", params);
+};
+
 // This function simulates searching for words using AI
 // In a real application, this would call the OpenRouter API
 export const searchWords = async (params: SearchParams): Promise<WordResult[]> => {
   console.log("Searching with params:", params);
+  
+  // Check cache first
+  const cachedResults = getCachedResults(params);
+  if (cachedResults) {
+    return cachedResults;
+  }
   
   const apiKey = getApiKey();
   const selectedModel = getSelectedModel();
@@ -101,7 +194,14 @@ export const searchWords = async (params: SearchParams): Promise<WordResult[]> =
       
       // Simulate API response based on the pattern and clue
       const mockResults = generateMockResults(pattern, params);
-      resolve(mockResults);
+      
+      // Cache the results
+      cacheResults(params, mockResults);
+      
+      // Apply max results limit
+      const limitedResults = mockResults.slice(0, getMaxResults());
+      
+      resolve(limitedResults);
     }, 1500); // Simulate network delay
   });
 };
