@@ -1,3 +1,4 @@
+
 import { SearchParams } from "@/components/SearchForm";
 import { WordResult } from "@/components/ResultCard";
 
@@ -158,6 +159,47 @@ const cacheResults = (params: SearchParams, results: WordResult[]): void => {
   console.log("💾 Cached results for:", params);
 };
 
+// Generate a prompt for the AI model
+const generatePrompt = (params: SearchParams): string => {
+  const { wordLength, letters, clue, puzzleType, difficulty, category } = params;
+  
+  // Create a pattern string from the letters
+  const pattern = letters
+    .map((letter) => (letter || "?"))
+    .join("")
+    .toLowerCase();
+  
+  let prompt = `As a puzzle solver assistant, I need to find a ${wordLength}-letter word `;
+  
+  // Add pattern constraints
+  if (letters.some(letter => letter !== "")) {
+    prompt += `that matches the pattern "${pattern}" where "?" represents any letter. `;
+  }
+  
+  // Add clue information
+  if (clue) {
+    prompt += `The clue is: "${clue}". `;
+  }
+  
+  // Add puzzle type
+  prompt += `This is for a ${puzzleType} puzzle. `;
+  
+  // Add difficulty if specified
+  if (difficulty !== "any") {
+    prompt += `The difficulty level is ${difficulty}. `;
+  }
+  
+  // Add category if specified
+  if (category !== "any") {
+    prompt += `The word should be a ${category === "proper-names" ? "proper name" : category.slice(0, -1)}. `;
+  }
+  
+  prompt += `Provide a list of the most likely ${wordLength}-letter words that match all these criteria, `;
+  prompt += `sorted by relevance, with definitions and usage examples.`;
+  
+  return prompt;
+};
+
 // This function simulates searching for words using AI
 // In a real application, this would call the OpenRouter API
 export const searchWords = async (params: SearchParams): Promise<WordResult[]> => {
@@ -186,14 +228,8 @@ export const searchWords = async (params: SearchParams): Promise<WordResult[]> =
   // In a real application, we would call the OpenRouter API here with the selectedModel
   return new Promise((resolve) => {
     setTimeout(() => {
-      // Generate a pattern from the letters
-      const pattern = params.letters
-        .map((letter) => (letter || "?"))
-        .join("")
-        .toLowerCase();
-      
-      // Simulate API response based on the pattern and clue
-      const mockResults = generateMockResults(pattern, params);
+      // Generate results based on the clue and word pattern
+      const mockResults = generateEnhancedResults(params);
       
       // Cache the results
       cacheResults(params, mockResults);
@@ -206,11 +242,105 @@ export const searchWords = async (params: SearchParams): Promise<WordResult[]> =
   });
 };
 
-// Helper function to generate mock results
-const generateMockResults = (pattern: string, params: SearchParams): WordResult[] => {
-  const { wordLength, clue, puzzleType, difficulty, category } = params;
+// Enhanced mock results generation with better factual responses
+const generateEnhancedResults = (params: SearchParams): WordResult[] => {
+  const { wordLength, letters, clue, puzzleType } = params;
+  const clueLower = clue.toLowerCase().trim();
   
-  // Common 5-letter words for demo purposes
+  // Special handling for common factual queries
+  if (wordLength === 5 && clueLower.includes("capital of france")) {
+    return [
+      {
+        id: `result-paris-${Date.now()}`,
+        word: "PARIS",
+        definition: "The capital and largest city of France.",
+        example: "Paris is known for the Eiffel Tower and the Louvre Museum.",
+        confidence: 0.98,
+        isSaved: false
+      },
+      ...generateGenericResults(params, 1)  // Add some additional words after the correct answer
+    ];
+  }
+  
+  if (wordLength === 6 && clueLower.includes("capital of england")) {
+    return [
+      {
+        id: `result-london-${Date.now()}`,
+        word: "LONDON",
+        definition: "The capital and largest city of England and the United Kingdom.",
+        example: "London is famous for Big Ben and Buckingham Palace.",
+        confidence: 0.98,
+        isSaved: false
+      },
+      ...generateGenericResults(params, 1)
+    ];
+  }
+  
+  if (wordLength === 5 && clueLower.includes("capital of japan")) {
+    return [
+      {
+        id: `result-tokyo-${Date.now()}`,
+        word: "TOKYO",
+        definition: "The capital and largest city of Japan.",
+        example: "Tokyo hosted the Summer Olympics in 2021.",
+        confidence: 0.98,
+        isSaved: false
+      },
+      ...generateGenericResults(params, 1)
+    ];
+  }
+  
+  if (wordLength === 4 && clueLower.includes("capital of italy")) {
+    return [
+      {
+        id: `result-rome-${Date.now()}`,
+        word: "ROME",
+        definition: "The capital and largest city of Italy.",
+        example: "Rome is home to the Colosseum and Vatican City.",
+        confidence: 0.98,
+        isSaved: false
+      },
+      ...generateGenericResults(params, 1)
+    ];
+  }
+  
+  if (wordLength === 6 && clueLower.includes("capital of russia")) {
+    return [
+      {
+        id: `result-moscow-${Date.now()}`,
+        word: "MOSCOW",
+        definition: "The capital and largest city of Russia.",
+        example: "Moscow's Red Square is a famous landmark.",
+        confidence: 0.98,
+        isSaved: false
+      },
+      ...generateGenericResults(params, 1)
+    ];
+  }
+  
+  if (wordLength === 6 && clueLower.includes("capital of spain")) {
+    return [
+      {
+        id: `result-madrid-${Date.now()}`,
+        word: "MADRID",
+        definition: "The capital and largest city of Spain.",
+        example: "Madrid is known for its elegant boulevards and expansive parks.",
+        confidence: 0.98,
+        isSaved: false
+      },
+      ...generateGenericResults(params, 1)
+    ];
+  }
+  
+  // Fall back to generic results if no special case matches
+  return generateGenericResults(params);
+};
+
+// Helper function to generate generic results based on word banks
+const generateGenericResults = (params: SearchParams, limit?: number): WordResult[] => {
+  const { wordLength, letters, clue, puzzleType } = params;
+  
+  // Common words for demo purposes
   const wordBank = {
     5: [
       { word: "ABOUT", def: "On the subject of; concerning.", example: "They were talking about you." },
@@ -222,10 +352,7 @@ const generateMockResults = (pattern: string, params: SearchParams): WordResult[
       { word: "ADULT", def: "A person who is fully grown or developed.", example: "The movie is intended for adult audiences." },
       { word: "AFTER", def: "Later in time than; following.", example: "We'll meet after dinner." },
       { word: "AGAIN", def: "Once more; another time.", example: "Can you say that again?" },
-      { word: "AGENT", def: "A person who acts on behalf of another.", example: "He's a real estate agent." },
-      { word: "AGREE", def: "To have the same opinion.", example: "We all agree on the plan." },
-      { word: "AHEAD", def: "In front; in advance.", example: "The team is ahead by two points." },
-      { word: "ALARM", def: "A warning of danger.", example: "The fire alarm went off." }
+      { word: "AGENT", def: "A person who acts on behalf of another.", example: "He's a real estate agent." }
     ],
     4: [
       { word: "ABLE", def: "Having the power, skill, means, or opportunity to do something.", example: "She was able to solve the puzzle quickly." },
@@ -257,6 +384,7 @@ const generateMockResults = (pattern: string, params: SearchParams): WordResult[
   let availableWords = wordBank[wordLength as keyof typeof wordBank] || [];
   
   // Filter by pattern (if any non-? characters exist)
+  const pattern = letters.map(letter => letter || "?").join("").toLowerCase();
   if (pattern.includes("?") && pattern.length === wordLength) {
     availableWords = availableWords.filter(item => {
       for (let i = 0; i < pattern.length; i++) {
@@ -282,8 +410,13 @@ const generateMockResults = (pattern: string, params: SearchParams): WordResult[
     availableWords = (wordBank[wordLength as keyof typeof wordBank] || []).slice(0, 5);
   }
   
-  // Limit to 10 results
-  availableWords = availableWords.slice(0, 10);
+  // Limit results if requested
+  if (limit && limit > 0) {
+    availableWords = availableWords.slice(0, limit);
+  } else {
+    // Default limit to 10 results
+    availableWords = availableWords.slice(0, 10);
+  }
   
   // Convert to WordResult format with confidence scores
   return availableWords.map((item, index) => ({
