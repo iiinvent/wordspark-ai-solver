@@ -169,7 +169,7 @@ const generatePrompt = (params: SearchParams): string => {
     .join("")
     .toLowerCase();
   
-  let prompt = `As a puzzle solver assistant, I need to find a ${wordLength}-letter word `;
+  let prompt = `As a word puzzle expert, I need to find a ${wordLength}-letter word `;
   
   // Add pattern constraints
   if (letters.some(letter => letter !== "")) {
@@ -194,14 +194,52 @@ const generatePrompt = (params: SearchParams): string => {
     prompt += `The word should be a ${category === "proper-names" ? "proper name" : category.slice(0, -1)}. `;
   }
   
-  prompt += `Provide a list of the most likely ${wordLength}-letter words that match all these criteria, `;
-  prompt += `sorted by relevance, with definitions and usage examples.`;
+  prompt += `Provide a JSON array of the most likely ${wordLength}-letter words that match all these criteria, `;
+  prompt += `with each object containing "word" (in UPPERCASE), "definition", "example" (a sentence using the word), and "confidence" (decimal from 0-1). `;
+  prompt += `Sort them by relevance. Ensure factual accuracy and prioritize precise matches for factual queries (e.g., capitals). `;
+  prompt += `Format the response as a valid JSON array without explanations or markdown.`;
   
   return prompt;
 };
 
-// This function simulates searching for words using AI
-// In a real application, this would call the OpenRouter API
+// Parse the AI response into WordResult objects
+const parseAiResponse = (responseText: string): WordResult[] => {
+  try {
+    // Try to extract JSON if the response isn't pure JSON
+    let jsonText = responseText.trim();
+    
+    // Look for JSON array in the response
+    const jsonMatch = jsonText.match(/\[\s*{[\s\S]*}\s*\]/);
+    if (jsonMatch) {
+      jsonText = jsonMatch[0];
+    }
+    
+    // Parse the JSON
+    const results = JSON.parse(jsonText);
+    
+    if (!Array.isArray(results)) {
+      console.error("AI response is not an array:", results);
+      return [];
+    }
+    
+    // Map to WordResult format and validate
+    return results.map((item, index) => ({
+      id: `result-${index}-${Date.now()}`,
+      word: typeof item.word === 'string' ? item.word.toUpperCase() : `UNKNOWN-${index}`,
+      definition: typeof item.definition === 'string' ? item.definition : "No definition provided",
+      example: typeof item.example === 'string' ? item.example : undefined,
+      confidence: typeof item.confidence === 'number' && !isNaN(item.confidence) ? 
+        Math.min(Math.max(item.confidence, 0), 1) : // Clamp between 0 and 1
+        0.5, // Default confidence
+      isSaved: false
+    }));
+  } catch (error) {
+    console.error("Error parsing AI response:", error);
+    return [];
+  }
+};
+
+// Implement the real word search using OpenRouter API
 export const searchWords = async (params: SearchParams): Promise<WordResult[]> => {
   console.log("Searching with params:", params);
   
@@ -224,207 +262,67 @@ export const searchWords = async (params: SearchParams): Promise<WordResult[]> =
   
   console.log("Using model:", selectedModel);
   
-  // For demo purposes, we'll simulate an API call and return mock data
-  // In a real application, we would call the OpenRouter API here with the selectedModel
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Generate results based on the clue and word pattern
-      const mockResults = generateEnhancedResults(params);
-      
-      // Cache the results
-      cacheResults(params, mockResults);
-      
-      // Apply max results limit
-      const limitedResults = mockResults.slice(0, getMaxResults());
-      
-      resolve(limitedResults);
-    }, 1500); // Simulate network delay
-  });
-};
-
-// Enhanced mock results generation with better factual responses
-const generateEnhancedResults = (params: SearchParams): WordResult[] => {
-  const { wordLength, letters, clue, puzzleType } = params;
-  const clueLower = clue.toLowerCase().trim();
-  
-  // Special handling for common factual queries
-  if (wordLength === 5 && clueLower.includes("capital of france")) {
-    return [
-      {
-        id: `result-paris-${Date.now()}`,
-        word: "PARIS",
-        definition: "The capital and largest city of France.",
-        example: "Paris is known for the Eiffel Tower and the Louvre Museum.",
-        confidence: 0.98,
-        isSaved: false
+  try {
+    const prompt = generatePrompt(params);
+    console.log("Prompt:", prompt);
+    
+    // Call OpenRouter API
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": window.location.origin, // Required by OpenRouter
+        "X-Title": "WordSpark Puzzle Solver" // App name for OpenRouter
       },
-      ...generateGenericResults(params, 1)  // Add some additional words after the correct answer
-    ];
-  }
-  
-  if (wordLength === 6 && clueLower.includes("capital of england")) {
-    return [
-      {
-        id: `result-london-${Date.now()}`,
-        word: "LONDON",
-        definition: "The capital and largest city of England and the United Kingdom.",
-        example: "London is famous for Big Ben and Buckingham Palace.",
-        confidence: 0.98,
-        isSaved: false
-      },
-      ...generateGenericResults(params, 1)
-    ];
-  }
-  
-  if (wordLength === 5 && clueLower.includes("capital of japan")) {
-    return [
-      {
-        id: `result-tokyo-${Date.now()}`,
-        word: "TOKYO",
-        definition: "The capital and largest city of Japan.",
-        example: "Tokyo hosted the Summer Olympics in 2021.",
-        confidence: 0.98,
-        isSaved: false
-      },
-      ...generateGenericResults(params, 1)
-    ];
-  }
-  
-  if (wordLength === 4 && clueLower.includes("capital of italy")) {
-    return [
-      {
-        id: `result-rome-${Date.now()}`,
-        word: "ROME",
-        definition: "The capital and largest city of Italy.",
-        example: "Rome is home to the Colosseum and Vatican City.",
-        confidence: 0.98,
-        isSaved: false
-      },
-      ...generateGenericResults(params, 1)
-    ];
-  }
-  
-  if (wordLength === 6 && clueLower.includes("capital of russia")) {
-    return [
-      {
-        id: `result-moscow-${Date.now()}`,
-        word: "MOSCOW",
-        definition: "The capital and largest city of Russia.",
-        example: "Moscow's Red Square is a famous landmark.",
-        confidence: 0.98,
-        isSaved: false
-      },
-      ...generateGenericResults(params, 1)
-    ];
-  }
-  
-  if (wordLength === 6 && clueLower.includes("capital of spain")) {
-    return [
-      {
-        id: `result-madrid-${Date.now()}`,
-        word: "MADRID",
-        definition: "The capital and largest city of Spain.",
-        example: "Madrid is known for its elegant boulevards and expansive parks.",
-        confidence: 0.98,
-        isSaved: false
-      },
-      ...generateGenericResults(params, 1)
-    ];
-  }
-  
-  // Fall back to generic results if no special case matches
-  return generateGenericResults(params);
-};
-
-// Helper function to generate generic results based on word banks
-const generateGenericResults = (params: SearchParams, limit?: number): WordResult[] => {
-  const { wordLength, letters, clue, puzzleType } = params;
-  
-  // Common words for demo purposes
-  const wordBank = {
-    5: [
-      { word: "ABOUT", def: "On the subject of; concerning.", example: "They were talking about you." },
-      { word: "ABOVE", def: "In or to a higher place.", example: "The clouds above were dark and threatening." },
-      { word: "ACTOR", def: "A person who performs in a play, film, etc.", example: "The actor won an award for his performance." },
-      { word: "ADAPT", def: "To adjust or modify to suit new conditions.", example: "The company had to adapt to the changing market." },
-      { word: "ADMIT", def: "To acknowledge or confess something.", example: "She admitted her mistake." },
-      { word: "ADOPT", def: "To legally take another's child as one's own.", example: "They decided to adopt a baby from overseas." },
-      { word: "ADULT", def: "A person who is fully grown or developed.", example: "The movie is intended for adult audiences." },
-      { word: "AFTER", def: "Later in time than; following.", example: "We'll meet after dinner." },
-      { word: "AGAIN", def: "Once more; another time.", example: "Can you say that again?" },
-      { word: "AGENT", def: "A person who acts on behalf of another.", example: "He's a real estate agent." }
-    ],
-    4: [
-      { word: "ABLE", def: "Having the power, skill, means, or opportunity to do something.", example: "She was able to solve the puzzle quickly." },
-      { word: "ACID", def: "A chemical substance with a pH less than 7.", example: "Citric acid gives lemons their sour taste." },
-      { word: "AGED", def: "Having lived or existed for a specified length of time.", example: "The aged cheese had a strong flavor." },
-      { word: "ALSO", def: "In addition; too; besides.", example: "She sings and also plays guitar." },
-      { word: "AREA", def: "A particular part of a place, piece of land, or country.", example: "This area of the city is known for its restaurants." },
-      { word: "ARMY", def: "A large organized body of armed personnel trained for war.", example: "He joined the army after college." },
-      { word: "AWAY", def: "To or at a distance from a particular place or person.", example: "She walked away without saying goodbye." },
-      { word: "BABY", def: "A very young child.", example: "The baby smiled at its mother." },
-      { word: "BACK", def: "The rear surface of the human body.", example: "He hurt his back lifting the heavy box." },
-      { word: "BALL", def: "A solid or hollow spherical object used in games.", example: "They played with a beach ball." }
-    ],
-    6: [
-      { word: "ACTION", def: "The process of doing something.", example: "The government took action on climate change." },
-      { word: "ACTIVE", def: "Engaging or ready to engage in physically energetic pursuits.", example: "He leads an active lifestyle." },
-      { word: "ACTUAL", def: "Existing in fact, real.", example: "The actual cost was higher than expected." },
-      { word: "ADJUST", def: "To alter or move something slightly to achieve the desired fit or appearance.", example: "You need to adjust your posture when sitting." },
-      { word: "ADMIRE", def: "To regard with respect or warm approval.", example: "I admire your courage." },
-      { word: "ADVICE", def: "Guidance or recommendations offered with regard to future action.", example: "She gave me some good advice." },
-      { word: "AFFORD", def: "To have enough money to pay for something.", example: "We can't afford a new car right now." },
-      { word: "AFRAID", def: "Feeling fear or anxiety; frightened.", example: "She's afraid of spiders." },
-      { word: "AGENCY", def: "A business or organization providing a particular service.", example: "They hired an advertising agency." },
-      { word: "AGENDA", def: "A list of items to be discussed at a meeting.", example: "The first item on the agenda is the budget." }
-    ]
-  };
-  
-  // Get words that match the word length
-  let availableWords = wordBank[wordLength as keyof typeof wordBank] || [];
-  
-  // Filter by pattern (if any non-? characters exist)
-  const pattern = letters.map(letter => letter || "?").join("").toLowerCase();
-  if (pattern.includes("?") && pattern.length === wordLength) {
-    availableWords = availableWords.filter(item => {
-      for (let i = 0; i < pattern.length; i++) {
-        if (pattern[i] !== "?" && pattern[i].toUpperCase() !== item.word[i]) {
-          return false;
-        }
-      }
-      return true;
+      body: JSON.stringify({
+        model: selectedModel,
+        messages: [
+          {
+            role: "system",
+            content: "You are a word puzzle expert assistant that helps users find words matching specific patterns and clues. Always respond with accurate, factual information in the requested format."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.2, // Lower temperature for more precise answers
+        max_tokens: 800,
+        response_format: { type: "json_object" } // Request JSON format
+      })
     });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        `OpenRouter API error (${response.status}): ${
+          errorData.error?.message || response.statusText
+        }`
+      );
+    }
+    
+    const data = await response.json();
+    console.log("OpenRouter response:", data);
+    
+    // Extract the content from the response
+    const content = data.choices?.[0]?.message?.content;
+    if (!content) {
+      throw new Error("Unexpected API response format");
+    }
+    
+    // Parse the response into WordResult objects
+    const wordResults = parseAiResponse(content);
+    
+    // Apply max results limit
+    const limitedResults = wordResults.slice(0, getMaxResults());
+    
+    // Cache the results
+    cacheResults(params, limitedResults);
+    
+    return limitedResults;
+  } catch (error) {
+    console.error("OpenRouter API error:", error);
+    throw error;
   }
-  
-  // Filter by clue (if provided)
-  if (clue) {
-    const clueWords = clue.toLowerCase().split(/\s+/);
-    availableWords = availableWords.filter(item => {
-      const combinedText = (item.def + " " + (item.example || "")).toLowerCase();
-      return clueWords.some(word => combinedText.includes(word));
-    });
-  }
-  
-  // If no matching words, return some default ones
-  if (availableWords.length === 0) {
-    availableWords = (wordBank[wordLength as keyof typeof wordBank] || []).slice(0, 5);
-  }
-  
-  // Limit results if requested
-  if (limit && limit > 0) {
-    availableWords = availableWords.slice(0, limit);
-  } else {
-    // Default limit to 10 results
-    availableWords = availableWords.slice(0, 10);
-  }
-  
-  // Convert to WordResult format with confidence scores
-  return availableWords.map((item, index) => ({
-    id: `result-${index}-${Date.now()}`,
-    word: item.word,
-    definition: item.def,
-    example: item.example,
-    confidence: 0.95 - (index * 0.07), // Decreasing confidence for demo
-    isSaved: false
-  }));
 };
