@@ -5,6 +5,7 @@ import { WordResult } from "@/components/ResultCard";
 // In a real app, this would be in an environment variable
 // For now, we'll assume we'd get it from a form or localStorage
 let OPENROUTER_API_KEY = "";
+let SELECTED_MODEL = "";
 
 export const setApiKey = (key: string) => {
   OPENROUTER_API_KEY = key;
@@ -18,19 +19,78 @@ export const getApiKey = () => {
   return OPENROUTER_API_KEY;
 };
 
-// This function simulates searching for words using AI
-// In a real application, this would call the OpenRouter API
-export const searchWords = async (params: SearchParams): Promise<WordResult[]> => {
-  console.log("Searching with params:", params);
-  
+export const setSelectedModel = (model: string) => {
+  SELECTED_MODEL = model;
+  localStorage.setItem("selected_model", model);
+};
+
+export const getSelectedModel = () => {
+  if (!SELECTED_MODEL) {
+    SELECTED_MODEL = localStorage.getItem("selected_model") || "";
+  }
+  return SELECTED_MODEL;
+};
+
+export interface OpenRouterModel {
+  id: string;
+  name: string;
+  description?: string;
+  context_length?: number;
+  pricing?: {
+    prompt: number;
+    completion: number;
+  };
+}
+
+// Fetch available models from OpenRouter
+export const fetchOpenRouterModels = async (): Promise<OpenRouterModel[]> => {
   const apiKey = getApiKey();
   
   if (!apiKey) {
     throw new Error("API key is required");
   }
   
+  try {
+    const response = await fetch("https://openrouter.ai/api/v1/models", {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching models: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    return data.data || [];
+  } catch (error) {
+    console.error("Error fetching models:", error);
+    throw error;
+  }
+};
+
+// This function simulates searching for words using AI
+// In a real application, this would call the OpenRouter API
+export const searchWords = async (params: SearchParams): Promise<WordResult[]> => {
+  console.log("Searching with params:", params);
+  
+  const apiKey = getApiKey();
+  const selectedModel = getSelectedModel();
+  
+  if (!apiKey) {
+    throw new Error("API key is required");
+  }
+  
+  if (!selectedModel) {
+    throw new Error("Please select an AI model first");
+  }
+  
+  console.log("Using model:", selectedModel);
+  
   // For demo purposes, we'll simulate an API call and return mock data
-  // In a real application, we would call the OpenRouter API here
+  // In a real application, we would call the OpenRouter API here with the selectedModel
   return new Promise((resolve) => {
     setTimeout(() => {
       // Generate a pattern from the letters

@@ -5,12 +5,14 @@ import SearchForm, { SearchParams } from "@/components/SearchForm";
 import Results from "@/components/Results";
 import Header from "@/components/Header";
 import ApiKeyForm from "@/components/ApiKeyForm";
+import SettingsDialog from "@/components/SettingsDialog";
 import { WordResult } from "@/components/ResultCard";
-import { getApiKey, searchWords } from "@/services/apiService";
+import { getApiKey, getSelectedModel, searchWords } from "@/services/apiService";
 
 const Index = () => {
   const { toast } = useToast();
   const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [results, setResults] = useState<WordResult[]>([]);
   const [savedResults, setSavedResults] = useState<WordResult[]>([]);
   const [searchParams, setSearchParams] = useState<SearchParams | undefined>();
@@ -28,8 +30,11 @@ const Index = () => {
       }
     }
     
-    // Check if API key exists, if not open the modal
-    if (!getApiKey()) {
+    // Check if API key and model exist, if not open the modal
+    const hasApiKey = getApiKey();
+    const hasModel = getSelectedModel();
+    
+    if (!hasApiKey || !hasModel) {
       setIsApiKeyModalOpen(true);
     }
   }, []);
@@ -48,6 +53,13 @@ const Index = () => {
       // Check for API key
       if (!getApiKey()) {
         setIsApiKeyModalOpen(true);
+        setIsLoading(false);
+        return;
+      }
+      
+      // Check for selected model
+      if (!getSelectedModel()) {
+        setIsSettingsModalOpen(true);
         setIsLoading(false);
         return;
       }
@@ -142,7 +154,10 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-puzzle-dark text-white">
       <div className="container mx-auto max-w-6xl px-4">
-        <Header onOpenApiKeyForm={() => setIsApiKeyModalOpen(true)} />
+        <Header 
+          onOpenApiKeyForm={() => setIsApiKeyModalOpen(true)} 
+          onOpenSettings={() => setIsSettingsModalOpen(true)}
+        />
         
         <main className="py-8">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -175,6 +190,11 @@ const Index = () => {
       <ApiKeyForm
         isOpen={isApiKeyModalOpen}
         onClose={() => setIsApiKeyModalOpen(false)}
+      />
+      
+      <SettingsDialog
+        isOpen={isSettingsModalOpen}
+        onClose={() => setIsSettingsModalOpen(false)}
       />
     </div>
   );

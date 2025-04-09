@@ -5,9 +5,10 @@ import { Key, Settings } from "lucide-react";
 
 interface HeaderProps {
   onOpenApiKeyForm: () => void;
+  onOpenSettings: () => void;
 }
 
-const Header = ({ onOpenApiKeyForm }: HeaderProps) => {
+const Header = ({ onOpenApiKeyForm, onOpenSettings }: HeaderProps) => {
   return (
     <header className="flex items-center justify-between py-4 px-4 md:px-0">
       <div className="flex items-center">
@@ -28,6 +29,16 @@ const Header = ({ onOpenApiKeyForm }: HeaderProps) => {
         >
           <Key className="h-5 w-5" />
           <span className="sr-only">API Key</span>
+        </Button>
+        
+        <Button
+          variant="ghost"
+          size="icon"
+          className="text-slate-400 hover:text-white hover:bg-puzzle-hover"
+          onClick={onOpenSettings}
+        >
+          <Settings className="h-5 w-5" />
+          <span className="sr-only">Settings</span>
         </Button>
       </div>
     </header>
